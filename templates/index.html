@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P音乐共享平台</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="/static/client.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#7C3AED',
+                        accent: '#EC4899',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glass {
+                @apply bg-white/10 backdrop-blur-md border border-white/20;
+            }
+            .gradient-bg {
+                @apply bg-gradient-to-br from-primary/90 to-secondary/90;
+            }
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 z-50 gradient-bg text-white shadow-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-music text-3xl"></i>
+                <h1 class="text-2xl font-bold">P2P音乐共享平台</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="hidden md:flex items-center space-x-1">
+                    <i class="fa fa-users"></i>
+                    <span id="peer-count">0</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-1">
+                    <i class="fa fa-music"></i>
+                    <span id="file-count">0</span>
+                </div>
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-white/20 transition-colors">
+                    <i class="fa fa-moon-o"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 统计卡片 -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">活跃节点</h3>
+                    <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <i class="fa fa-users text-primary text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex items-end space-x-2">
+                    <span id="active-peers" class="text-3xl font-bold text-gray-900">0</span>
+                    <span class="text-green-500 flex items-center text-sm mb-1">
+                        <i class="fa fa-arrow-up mr-1"></i>实时更新
+                    </span>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">共享文件</h3>
+                    <div class="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center">
+                        <i class="fa fa-file-audio-o text-secondary text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex items-end space-x-2">
+                    <span id="shared-files" class="text-3xl font-bold text-gray-900">0</span>
+                    <span class="text-green-500 flex items-center text-sm mb-1">
+                        <i class="fa fa-arrow-up mr-1"></i>实时更新
+                    </span>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">下载速度</h3>
+                    <div class="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                        <i class="fa fa-bolt text-accent text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex items-end space-x-2">
+                    <span id="download-speed" class="text-3xl font-bold text-gray-900">0 MB/s</span>
+                    <span class="text-gray-500 text-sm mb-1">实时监控</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 搜索区域 -->
+        <section class="mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">搜索音乐</h2>
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="relative flex-grow">
+                        <input type="text" id="search-input" placeholder="输入关键词搜索音乐..." 
+                            class="w-full px-6 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                        <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <button id="search-button" 
+                        class="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg shadow-md transition-all flex items-center justify-center space-x-2">
+                        <i class="fa fa-search"></i>
+                        <span>搜索</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 搜索结果区域 -->
+        <section class="mb-8">
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-800">搜索结果</h2>
+                </div>
+                <div id="search-results" class="p-6">
+                    <div class="text-gray-500 text-center py-12">
+                        <i class="fa fa-search text-4xl mb-4 block text-gray-300"></i>
+                        <p>输入关键词并点击搜索按钮开始查找音乐</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 文件管理区域 -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- 可下载文件 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">可下载音乐</h2>
+                    <button id="refresh-files" class="text-primary hover:text-primary/80 transition-colors">
+                        <i class="fa fa-refresh mr-1"></i>刷新
+                    </button>
+                </div>
+                <div id="available-files" class="p-0 max-h-[400px] overflow-y-auto">
+                    <!-- 文件列表将通过JavaScript动态添加 -->
+                </div>
+            </div>
+
+            <!-- 我的共享文件 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">我的共享文件</h2>
+                    <label for="file-upload" class="cursor-pointer px-4 py-2 bg-secondary hover:bg-secondary/90 text-white rounded-lg transition-all flex items-center space-x-2">
+                        <i class="fa fa-plus"></i>
+                        <span>添加文件</span>
+                    </label>
+                    <input id="file-upload" type="file" multiple accept=".mp3,.wav,.flac,.m4a" class="hidden">
+                </div>
+                <div id="my-shared-files" class="p-0 max-h-[400px] overflow-y-auto">
+                    <!-- 共享文件列表将通过JavaScript动态添加 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 网络统计图表 -->
+        <section class="mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">网络统计</h2>
+                <div class="h-[300px]">
+                    <canvas id="network-chart"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-900 text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <i class="fa fa-music text-2xl"></i>
+                        <h3 class="text-xl font-bold">P2P音乐共享平台</h3>
+                    </div>
+                    <p class="text-gray-400">高效、安全的去中心化音乐共享系统</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fa fa-github text-xl"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fa fa-twitter text-xl"></i></a>
+                    <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fa fa-linkedin text-xl"></i></a>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-6 pt-6 text-center text-gray-500">
+                <p>&copy; 2023 P2P音乐共享平台. 保留所有权利.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 下载进度模态框 -->
+    <div id="download-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-xl p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800" id="download-filename">下载文件</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div id="download-progress" class="gradient-bg h-4 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+                <p class="text-gray-500 text-sm mt-2" id="download-status">准备下载...</p>
+            </div>
+            <div class="flex justify-end">
+                <button id="cancel-download" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-all">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初始化Socket.IO连接
+            const socket = io('/music');
+            
+            // 获取DOM元素
+            const searchInput = document.getElementById('search-input');
+            const searchButton = document.getElementById('search-button');
+            const searchResults = document.getElementById('search-results');
+            const availableFiles = document.getElementById('available-files');
+            const mySharedFiles = document.getElementById('my-shared-files');
+            const fileUpload = document.getElementById('file-upload');
+            const refreshFilesBtn = document.getElementById('refresh-files');
+            const downloadModal = document.getElementById('download-modal');
+            const closeModalBtn = document.getElementById('close-modal');
+            const cancelDownloadBtn = document.getElementById('cancel-download');
+            const downloadProgress = document.getElementById('download-progress');
+            const downloadStatus = document.getElementById('download-status');
+            const downloadFilename = document.getElementById('download-filename');
+            const activePeersEl = document.getElementById('active-peers');
+            const sharedFilesEl = document.getElementById('shared-files');
+            const peerCountEl = document.getElementById('peer-count');
+            const fileCountEl = document.getElementById('file-count');
+            const downloadSpeedEl = document.getElementById('download-speed');
+            const themeToggle = document.getElementById('theme-toggle');
+            
+            // 初始化网络统计图表
+            const ctx = document.getElementById('network-chart').getContext('2d');
+            const networkChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 10}, (_, i) => i),
+                    datasets: [
+                        {
+                            label: '活跃节点数',
+                            data: Array(10).fill(0),
+                            borderColor: '#4F46E5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: '共享文件数',
+                            data: Array(10).fill(0),
+                            borderColor: '#EC4899',
+                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            // 更新图表数据
+            function updateChart(newPeerCount, newFileCount) {
+                networkChart.data.labels.shift();
+                networkChart.data.labels.push(networkChart.data.labels.length);
+                
+                networkChart.data.datasets[0].data.shift();
+                networkChart.data.datasets[0].data.push(newPeerCount);
+                
+                networkChart.data.datasets[1].data.shift();
+                networkChart.data.datasets[1].data.push(newFileCount);
+                
+                networkChart.update();
+            }
+            
+            // 搜索功能
+            searchButton.addEventListener('click', function() {
+                const keyword = searchInput.value.trim();
+                if (keyword) {
+                    socket.emit('search', {keyword: keyword});
+                }
+            });
+            
+            // 回车键触发搜索
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchButton.click();
+                }
+            });
+            
+            // 刷新文件列表
+            refreshFilesBtn.addEventListener('click', function() {
+                loadAvailableFiles();
+            });
+            
+            // 文件上传
+            fileUpload.addEventListener('change', async function(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    // 显示上传提示
+                    alert(`开始上传 ${files.length} 个文件`);
+                    
+                    try {
+                        // 实际调用handleFileUpload函数上传文件
+                        const results = await handleFileUpload(files);
+                        
+                        // 显示上传结果
+                        let successCount = 0;
+                        let errorCount = 0;
+                        let errorMessages = [];
+                        
+                        results.forEach(result => {
+                            if (result.success) {
+                                successCount++;
+                            } else {
+                                errorCount++;
+                                errorMessages.push(`${result.file}: ${result.message}`);
+                            }
+                        });
+                        
+                        let message = `成功上传 ${successCount} 个文件`;
+                        if (errorCount > 0) {
+                            message += `\n上传失败 ${errorCount} 个文件:\n${errorMessages.join('\n')}`;
+                        }
+                        
+                        alert(message);
+                        
+                        // 刷新文件列表
+                        loadMySharedFiles();
+                        loadAvailableFiles();
+                        
+                        // 重置文件输入
+                        fileUpload.value = '';
+                    } catch (error) {
+                        console.error('文件上传过程中发生错误:', error);
+                        alert('文件上传过程中发生错误，请重试');
+                    }
+                }
+            });
+            
+            // 模态框控制
+            closeModalBtn.addEventListener('click', function() {
+                downloadModal.classList.add('hidden');
+            });
+            
+            cancelDownloadBtn.addEventListener('click', function() {
+                downloadModal.classList.add('hidden');
+            });
+            
+            // 主题切换
+            themeToggle.addEventListener('click', function() {
+                document.body.classList.toggle('bg-gray-900');
+                document.body.classList.toggle('bg-gray-100');
+                document.body.classList.toggle('text-white');
+                document.body.classList.toggle('text-gray-900');
+                
+                const icon = themeToggle.querySelector('i');
+                if (icon.classList.contains('fa-moon-o')) {
+                    icon.classList.remove('fa-moon-o');
+                    icon.classList.add('fa-sun-o');
+                } else {
+                    icon.classList.remove('fa-sun-o');
+                    icon.classList.add('fa-moon-o');
+                }
+            });
+            
+            // 加载可用文件列表
+            function loadAvailableFiles() {
+                fetch('/api/files')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            renderFileList(data.files, availableFiles, true);
+                            // 更新文件计数
+                            sharedFilesEl.textContent = data.files.length;
+                            fileCountEl.textContent = data.files.length;
+                        }
+                    })
+                    .catch(error => console.error('加载可用文件失败:', error));
+            }
+            
+            // 加载我的共享文件列表
+            function loadMySharedFiles() {
+                // 这里简化处理，实际应从服务器获取当前用户的共享文件
+                fetch('/api/files')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // 模拟只显示部分文件作为"我的共享文件"
+                            const myFiles = data.files.slice(0, Math.min(5, data.files.length));
+                            renderFileList(myFiles, mySharedFiles, false);
+                        }
+                    })
+                    .catch(error => console.error('加载我的共享文件失败:', error));
+            }
+            
+            // 渲染文件列表
+            function renderFileList(files, container, showDownload) {
+                container.innerHTML = '';
+                
+                if (files.length === 0) {
+                    const emptyState = document.createElement('div');
+                    emptyState.className = 'p-6 text-center text-gray-500';
+                    emptyState.innerHTML = `
+                        <i class="fa fa-folder-open text-4xl mb-4 block text-gray-300"></i>
+                        <p>暂无文件</p>
+                    `;
+                    container.appendChild(emptyState);
+                    return;
+                }
+                
+                files.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = `p-4 border-b ${index === files.length - 1 ? 'border-b-0' : ''} hover:bg-gray-50 transition-colors flex justify-between items-center`;
+                    
+                    let fileIcon = 'fa-file-audio-o';
+                    if (file.toLowerCase().endsWith('.mp3')) fileIcon = 'fa-file-music-o';
+                    if (file.toLowerCase().endsWith('.wav')) fileIcon = 'fa-file-sound-o';
+                    if (file.toLowerCase().endsWith('.flac')) fileIcon = 'fa-file-audio-o';
+                    
+                    fileItem.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="fa ${fileIcon} text-primary text-xl"></i>
+                            <div>
+                                <p class="font-medium">${file}</p>
+                                <p class="text-sm text-gray-500">音乐文件</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (showDownload) {
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.className = 'px-3 py-1 bg-primary hover:bg-primary/90 text-white rounded-lg transition-all text-sm';
+                        downloadBtn.innerHTML = '<i class="fa fa-download mr-1"></i>下载';
+                        downloadBtn.addEventListener('click', function() {
+                            startDownload(file);
+                        });
+                        fileItem.appendChild(downloadBtn);
+                    }
+                    
+                    container.appendChild(fileItem);
+                });
+            }
+            
+            // 开始下载文件
+            function startDownload(filename) {
+                // 显示下载模态框
+                downloadModal.classList.remove('hidden');
+                downloadFilename.textContent = `下载 ${filename}`;
+                downloadProgress.style.width = '0%';
+                downloadStatus.textContent = '准备下载...';
+                
+                // 模拟下载进度
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 10;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        downloadStatus.textContent = '下载完成！';
+                        setTimeout(() => {
+                            downloadModal.classList.add('hidden');
+                        }, 1000);
+                    } else {
+                        downloadStatus.textContent = `下载中: ${Math.round(progress)}%`;
+                    }
+                    downloadProgress.style.width = `${progress}%`;
+                }, 300);
+                
+                // 存储当前下载的interval ID，以便取消下载
+                downloadModal.dataset.intervalId = interval;
+            }
+            
+            // Socket.IO事件处理
+            socket.on('connect', function() {
+                console.log('已连接到服务器');
+            });
+            
+            socket.on('file_list_update', function(data) {
+                if (data.files) {
+                    renderFileList(data.files, availableFiles, true);
+                    sharedFilesEl.textContent = data.files.length;
+                    fileCountEl.textContent = data.files.length;
+                    // 更新图表
+                    updateChart(parseInt(activePeersEl.textContent), data.files.length);
+                }
+            });
+            
+            socket.on('file_list_updated', function(data) {
+                if (data.files) {
+                    renderFileList(data.files, availableFiles, true);
+                    sharedFilesEl.textContent = data.files.length;
+                    fileCountEl.textContent = data.files.length;
+                    // 更新图表
+                    updateChart(parseInt(activePeersEl.textContent), data.files.length);
+                }
+            });
+            
+            socket.on('search_results', function(data) {
+                if (data.results) {
+                    renderSearchResults(data.results);
+                }
+            });
+            
+            // 渲染搜索结果
+            function renderSearchResults(results) {
+                searchResults.innerHTML = '';
+                
+                if (Object.keys(results).length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="text-gray-500 text-center py-12">
+                            <i class="fa fa-search text-4xl mb-4 block text-gray-300"></i>
+                            <p>没有找到匹配的文件</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const resultsList = document.createElement('div');
+                resultsList.className = 'space-y-4';
+                
+                Object.keys(results).forEach(filename => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'bg-gray-50 p-4 rounded-lg border border-gray-200 card-hover';
+                    
+                    let fileIcon = 'fa-file-audio-o';
+                    if (filename.toLowerCase().endsWith('.mp3')) fileIcon = 'fa-file-music-o';
+                    if (filename.toLowerCase().endsWith('.wav')) fileIcon = 'fa-file-sound-o';
+                    if (filename.toLowerCase().endsWith('.flac')) fileIcon = 'fa-file-audio-o';
+                    
+                    const peers = results[filename];
+                    
+                    fileItem.innerHTML = `
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-3">
+                                <i class="fa ${fileIcon} text-primary text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium">${filename}</h3>
+                                    <p class="text-sm text-gray-500">可从 ${peers.length} 个节点下载</p>
+                                </div>
+                            </div>
+                            <button class="download-btn px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-all"
+                                data-filename="${filename}">
+                                <i class="fa fa-download mr-1"></i>下载
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            <p>可下载节点: ${peers.map(peer => `${peer[0]}:${peer[1]}`).join(', ')}</p>
+                        </div>
+                    `;
+                    
+                    resultsList.appendChild(fileItem);
+                });
+                
+                searchResults.appendChild(resultsList);
+                
+                // 添加下载按钮事件监听
+                document.querySelectorAll('.download-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const filename = this.dataset.filename;
+                        startDownload(filename);
+                    });
+                });
+            }
+            
+            // 初始化页面
+            function initPage() {
+                loadAvailableFiles();
+                loadMySharedFiles();
+                
+                // 模拟节点数量更新
+                setInterval(() => {
+                    const peerCount = Math.floor(Math.random() * 10) + 5;
+                    activePeersEl.textContent = peerCount;
+                    peerCountEl.textContent = peerCount;
+                    // 更新图表
+                    updateChart(peerCount, parseInt(sharedFilesEl.textContent));
+                }, 5000);
+                
+                // 模拟下载速度更新
+                setInterval(() => {
+                    const speed = (Math.random() * 5).toFixed(2);
+                    downloadSpeedEl.textContent = `${speed} MB/s`;
+                }, 1000);
+            }
+            
+            // 初始化页面
+            initPage();
+        });
+    </script>
+</body>
+</html>
